@@ -3,13 +3,21 @@
 A single-page web game / social experiment: everyone who opens the page shares
 control of **one cursor**. No one player can move it alone — every drag is a
 real vote, summed with everyone else currently dragging, and the cursor
-drifts toward the net direction. The shared goal: steer it onto a button and
-hold it there for 2 seconds.
+drifts toward the net direction. The shared goal: steer it onto a target and
+hold it there for 2 seconds — while total strangers, and at least a few
+trolls, actively fight you for it.
 
 This is now a **real, live multiplayer product** — every visitor connects to
 the same authoritative game state. There is no simulated crowd; if only one
 person is on the page, the game is genuinely just that one person (plus
 whoever else happens to open the page at the same time).
+
+The target button's copy is deliberately unhinged and rotates every task —
+"PRESS ME, COWARD," "UNLOCK SIGMA MODE," "L + RATIO IF YOU MISS," and two
+dozen other gen-z-bait one-liners (see `TARGET_LABELS` in `api/_lib.js`) —
+on purpose, to be the kind of thing people scream-share into a group chat.
+Same idea for the completion toast (`CELEBRATIONS` in `index.html`), which
+throws a different absurd victory line every time a task gets completed.
 
 ## Architecture
 
@@ -82,9 +90,10 @@ That's it — no separate backend to run, nothing to keep alive yourself.
 - **Anywhere on screen:** press and drag — you're pulling against everyone
   else currently connected.
 - **Mobile:** works the same via touch.
-- Steer the glowing cursor onto the **PRESS ME** button and keep it there
-  for 2 seconds to complete the task. A new task (button in a new spot)
-  spawns immediately after, for everyone.
+- Steer the glowing cursor onto the target (button copy changes every
+  round — good luck) and keep it there for 2 seconds to complete the task.
+  A new task (new spot, new trolling label) spawns immediately after, for
+  everyone.
 - Tap the ⓘ icons to learn more about the concept and the rules.
 - The small dot bottom-right shows real connection status: *connecting…*,
   *live*, or *reconnecting…*.

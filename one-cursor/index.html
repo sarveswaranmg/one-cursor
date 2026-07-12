@@ -6,7 +6,18 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
     />
-    <title>ONE CURSOR</title>
+    <title>ONE CURSOR — the whole internet fighting over 1 cursor</title>
+    <meta
+      name="description"
+      content="Everyone who opens this page controls the SAME cursor. Real strangers, real trolls, one shared cursor — no cap. Drag to join the chaos."
+    />
+    <meta property="og:title" content="ONE CURSOR" />
+    <meta
+      property="og:description"
+      content="The whole internet is fighting over one cursor right now. Drag to join the chaos."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary" />
     <style>
       :root {
         --red: #ff4d2e;
@@ -385,7 +396,7 @@
       <canvas id="stage"></canvas>
     </div>
 
-    <button class="target-btn" id="targetBtn">PRESS ME</button>
+    <button class="target-btn" id="targetBtn">SEND IT</button>
 
     <div class="hud">
       <div class="hud-left">
@@ -395,7 +406,7 @@
           <b id="taskCount">0</b> tasks done
         </div>
         <div class="task-line" style="position: relative">
-          TASK #<b id="taskNum">1</b>&nbsp;— drag the cursor onto the button
+          TASK #<b id="taskNum">1</b>&nbsp;— drag the cursor onto the target, no cap
           <button
             class="info-btn small"
             id="taskInfoBtn"
@@ -417,7 +428,7 @@
     </div>
 
     <div class="hint" id="hint">
-      press and drag anywhere — you're pulling against everyone else
+      drag anywhere, no cap — you're in a tug-of-war with total strangers rn
     </div>
     <div class="live-tag" id="liveTag"><span class="dot"></span><span id="liveTagText">connecting…</span></div>
 
@@ -425,15 +436,17 @@
       <div class="modal">
         <h2>WHAT IS THIS?</h2>
         <p>
-          This is <b>ONE CURSOR</b>. Everyone on this page sees the
-          <b>same</b> cursor. Nobody controls it alone — every player drags
-          toward where they want it to go, all the pulls are added together, and
-          the cursor moves where the <b>net force</b> points.
+          This is <b>ONE CURSOR</b>. Everyone on this page — real strangers,
+          right now — shares control of the <b>same</b> cursor. Nobody gets
+          to drive alone. Every player drags toward where they want it to
+          go, every pull gets added together, and the cursor moves wherever
+          the <b>net force</b> (aka the vibe of the crowd) points.
         </p>
         <p>
-          The thin lines are other people pulling right now. The background
-          color shows the crowd's current direction — vivid when everyone
-          agrees, grey when it's a deadlock.
+          The thin lines are other people pulling right now — some of them
+          are absolutely trying to troll you. The background color is a live
+          mood ring for the crowd: vivid when everyone agrees, grey when it's
+          total gridlock.
         </p>
         <div class="legend">
           <span><i style="background: var(--red)"></i>pulling left</span>
@@ -468,6 +481,23 @@
           down: { r: 168, g: 85, b: 247 },
         };
         const INK = { r: 14, g: 14, b: 18 };
+
+        // Picked client-side (doesn't need to match across players — it's
+        // just the flavor text on top of the shared justCompletedAt event).
+        const CELEBRATIONS = [
+          "WE ATE THAT. NO CRUMBS",
+          "MAIN CHARACTER ENERGY UNLOCKED",
+          "CERTIFIED W. RATIO INCOMING",
+          "HUMANITY: 1, CHAOS: 0",
+          "THAT'S ON PERIODT",
+          "NPCS COULD NEVER",
+          "AURA +9000",
+          "WE LOCKED IN FR",
+          "GOATED BEHAVIOR DETECTED",
+          "THE ASSIGNMENT: UNDERSTOOD",
+          "ZERO NOTES, COOKED IT",
+          "DELULU BECAME TRUE-LU",
+        ];
 
         const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
         const lerp = (a, b, t) => a + (b - a) * t;
@@ -608,13 +638,16 @@
         function applyServerState(s) {
           serverCursor = s.cursor;
           targetBtnNorm = s.targetBtn;
+          targetBtn.textContent = s.targetBtn.label || "PRESS ME";
           placeTarget();
           pulls = s.pulls || {};
           holdStartServer = s.holdStart;
           taskNumEl.textContent = s.taskNum;
           taskCountEl.textContent = s.tasksDone;
           if (s.justCompletedAt) {
-            showToast(`HUMANITY DID IT 🎉 — completed by ${onlineCount} players`);
+            const line =
+              CELEBRATIONS[(Math.random() * CELEBRATIONS.length) | 0];
+            showToast(`${line} 🎉 — completed by ${onlineCount} players`);
             fireConfetti(toPx(s.justCompletedAt));
           }
         }
@@ -968,7 +1001,7 @@
           const tip = document.createElement("div");
           tip.className = "tooltip";
           tip.textContent =
-            "Drag the shared cursor onto the button and hold it there for 2 seconds. Trolls will pull the other way — that's part of the game.";
+            "Drag the shared cursor onto the target and hold it there for 2 seconds. Trolls will absolutely pull the other way — that's not a bug, that's the whole game.";
           btn.parentElement.appendChild(tip);
           let on = false;
           const show = () => {

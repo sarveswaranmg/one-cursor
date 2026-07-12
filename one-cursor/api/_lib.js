@@ -25,8 +25,48 @@ const BROADCAST_MIN_GAP_MS = 110; // caps fan-out rate regardless of player coun
 const BOUND_MIN = 0.03;
 const BOUND_MAX = 0.97;
 
+// Trolling / gen-z bait button copy — a new one is picked (server-side, so
+// everyone sees the same one) every time a new target spawns. Keep entries
+// short-ish so the pill button doesn't wrap awkwardly on mobile.
+const TARGET_LABELS = [
+  "PRESS ME, COWARD",
+  "SEND IT",
+  "NO CAP, CLICK IT",
+  "BE THE MAIN CHARACTER",
+  "PROVE YOU'RE NOT AN NPC",
+  "CATCH THIS DUB",
+  "UNLOCK SIGMA MODE",
+  "IT'S GIVING CLICK ME",
+  "CERTIFIED HIT BUTTON",
+  "CHAOS BUTTON",
+  "AURA +1000",
+  "MANIFEST THIS CLICK",
+  "TOUCH THIS, NOT GRASS",
+  "BUSSIN BUTTON, FR",
+  "L + RATIO IF YOU MISS",
+  "BE FR RIGHT NOW",
+  "MID IF YOU DON'T CLICK",
+  "UNDERSTOOD THE ASSIGNMENT",
+  "COOKED IF WE MISS THIS",
+  "THIS IS SO REAL",
+  "GOATED TARGET",
+  "GLAZE THIS BUTTON",
+  "DELULU IS THE SOLULU",
+  "GIGACHAD MOVE ONLY",
+  "RATIO THIS BUTTON",
+  "SIGMA GRINDSET: CLICK",
+  "ICK IF YOU MISS",
+  "SLAY THE TARGET",
+  "ZERO RIZZ IF YOU MISS",
+  "PICK ME... NO, CLICK ME",
+];
+
 function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
+}
+
+function randomLabel() {
+  return TARGET_LABELS[(Math.random() * TARGET_LABELS.length) | 0];
 }
 
 function randomTarget(cursor) {
@@ -39,7 +79,7 @@ function randomTarget(cursor) {
     tries < 20 &&
     Math.hypot(p.x - cursor.x, p.y - cursor.y) < 0.3
   );
-  return p;
+  return { x: p.x, y: p.y, label: randomLabel() };
 }
 
 function freshState() {

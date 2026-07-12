@@ -1,0 +1,10 @@
+{
+  "name": "one-cursor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ONE CURSOR — a shared multiplayer cursor game, live on Vercel + Pusher + Upstash Redis",
+  "dependencies": {
+    "@upstash/redis": "^1.34.0",
+    "pusher": "^5.2.0"
+  }
+}

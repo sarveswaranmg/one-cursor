@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <title>ONE CURSOR</title>
+    <style>
+      :root {
+        --red: #ff4d2e;
+        --blue: #3b82f6;
+        --green: #2dd4a0;
+        --violet: #a855f7;
+        --gold: #ffd54a;
+        --ink: #0e0e12;
+        --text: #f4f4f7;
+        --dim: rgba(244, 244, 247, 0.55);
+        --line: rgba(255, 255, 255, 0.12);
+        --mono:
+          ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+          monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        overscroll-behavior: none;
+      }
+
+      body {
+        background-color: var(--ink);
+        transition: background-color 0.7s ease;
+        color: var(--text);
+        font-family: var(--mono);
+        -webkit-font-smoothing: antialiased;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      /* ---------- HUD (raw, counter-style) ---------- */
+      .hud {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        padding: 16px 18px;
+        z-index: 10;
+        pointer-events: none;
+      }
+      .hud-left {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .counter {
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        color: var(--text);
+      }
+      .counter b {
+        font-weight: 700;
+      }
+      .counter .sep {
+        color: var(--dim);
+        margin: 0 6px;
+      }
+      .task-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        color: var(--dim);
+      }
+      .task-line b {
+        color: var(--gold);
+        font-weight: 700;
+      }
+
+      .info-btn {
+        pointer-events: auto;
+        background: transparent;
+        border: 1px solid var(--line);
+        color: var(--dim);
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--mono);
+        transition:
+          color 0.2s,
+          border-color 0.2s,
+          background 0.2s,
+          transform 0.12s;
+      }
+      .info-btn:hover {
+        color: var(--text);
+        border-color: rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .info-btn:active {
+        transform: scale(0.9);
+      }
+      .info-btn.main {
+        width: 30px;
+        height: 30px;
+        font-size: 14px;
+      }
+      .info-btn.small {
+        width: 17px;
+        height: 17px;
+        font-size: 10px;
+      }
+
+      /* ---------- hint ---------- */
+      .hint {
+        position: fixed;
+        bottom: 18px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        color: var(--dim);
+        z-index: 10;
+        pointer-events: none;
+        animation: hintPulse 2.4s ease-in-out infinite;
+        text-align: center;
+        padding: 0 16px;
+      }
+      @keyframes hintPulse {
+        0%,
+        100% {
+          opacity: 0.85;
+        }
+        50% {
+          opacity: 0.35;
+        }
+      }
+      .hint.gone {
+        display: none;
+      }
+
+      /* ---------- live status tag ---------- */
+      .live-tag {
+        position: fixed;
+        bottom: 18px;
+        right: 18px;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        color: rgba(244, 244, 247, 0.3);
+        z-index: 10;
+        pointer-events: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .live-tag .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: rgba(244, 244, 247, 0.3);
+      }
+      .live-tag.on {
+        color: rgba(45, 212, 160, 0.85);
+      }
+      .live-tag.on .dot {
+        background: var(--green);
+        box-shadow: 0 0 6px var(--green);
+      }
+      @media (max-width: 640px) {
+        .live-tag {
+          display: none;
+        }
+      }
+
+      /* ---------- field + canvas ---------- */
+      #field {
+        position: fixed;
+        inset: 0;
+        cursor: grab;
+        touch-action: none;
+      }
+      #field.grabbing {
+        cursor: grabbing;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* ---------- target ---------- */
+      .target-btn {
+        position: fixed;
+        transform: translate(-50%, -50%);
+        padding: 13px 22px;
+        border: none;
+        border-radius: 12px;
+        font-family: var(--mono);
+        font-weight: 800;
+        font-size: 13px;
+        letter-spacing: 0.1em;
+        background: #ffffff;
+        color: #111;
+        pointer-events: none;
+        box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
+        animation: targetPulse 1.8s ease-in-out infinite;
+        z-index: 5;
+      }
+      @keyframes targetPulse {
+        0%,
+        100% {
+          box-shadow:
+            0 8px 26px rgba(0, 0, 0, 0.45),
+            0 0 0 0 rgba(255, 255, 255, 0.4);
+        }
+        50% {
+          box-shadow:
+            0 8px 26px rgba(0, 0, 0, 0.45),
+            0 0 0 16px rgba(255, 255, 255, 0);
+        }
+      }
+
+      /* ---------- toast ---------- */
+      #toast {
+        position: fixed;
+        top: 16%;
+        left: 50%;
+        transform: translate(-50%, -12px);
+        background: rgba(14, 14, 18, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        padding: 15px 26px;
+        border-radius: 14px;
+        font-weight: 700;
+        font-size: 13px;
+        letter-spacing: 0.04em;
+        text-align: center;
+        max-width: 88vw;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.3s ease,
+          transform 0.3s ease;
+        z-index: 70;
+      }
+      #toast.show {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, 0);
+      }
+
+      /* ---------- modal ---------- */
+      .overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.66);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 80;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease;
+      }
+      .overlay.show {
+        opacity: 1;
+        visibility: visible;
+      }
+      .modal {
+        background: #141419;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 26px 24px;
+        max-width: 430px;
+        width: 100%;
+        transform: translateY(10px) scale(0.97);
+        transition: transform 0.22s ease;
+      }
+      .overlay.show .modal {
+        transform: none;
+      }
+      .modal h2 {
+        margin: 0 0 12px;
+        font-size: 15px;
+        letter-spacing: 0.1em;
+      }
+      .modal p {
+        margin: 0 0 14px;
+        font-size: 12.5px;
+        line-height: 1.7;
+        color: #c9c9d2;
+      }
+      .modal .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 16px;
+        margin: 0 0 20px;
+        font-size: 11px;
+        color: var(--dim);
+      }
+      .modal .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .modal .legend i {
+        width: 9px;
+        height: 9px;
+        border-radius: 2px;
+      }
+      .modal button {
+        background: #fff;
+        color: #111;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 10px;
+        font-family: var(--mono);
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        cursor: pointer;
+      }
+      .modal button:hover {
+        background: #e4e4ec;
+      }
+
+      /* ---------- tooltip ---------- */
+      .tooltip {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        width: 240px;
+        background: rgba(16, 16, 22, 0.92);
+        border: 1px solid var(--line);
+        backdrop-filter: blur(14px);
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 11px;
+        line-height: 1.6;
+        color: var(--dim);
+        letter-spacing: 0.02em;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-4px);
+        transition:
+          opacity 0.18s ease,
+          transform 0.18s ease;
+        z-index: 60;
+        pointer-events: none;
+        text-transform: none;
+      }
+      .tooltip.show {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .target-btn,
+        .hint {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="field" class="">
+      <canvas id="stage"></canvas>
+    </div>
+
+    <button class="target-btn" id="targetBtn">PRESS ME</button>
+
+    <div class="hud">
+      <div class="hud-left">
+        <div class="counter">
+          <b id="pullCount">0</b> online
+          <span class="sep">·</span>
+          <b id="taskCount">0</b> tasks done
+        </div>
+        <div class="task-line" style="position: relative">
+          TASK #<b id="taskNum">1</b>&nbsp;— drag the cursor onto the button
+          <button
+            class="info-btn small"
+            id="taskInfoBtn"
+            aria-label="Task info"
+          >
+            i
+          </button>
+        </div>
+      </div>
+      <div style="position: relative; pointer-events: auto">
+        <button
+          class="info-btn main"
+          id="mainInfoBtn"
+          aria-label="What is this?"
+        >
+          i
+        </button>
+      </div>
+    </div>
+
+    <div class="hint" id="hint">
+      press and drag anywhere — you're pulling against everyone else
+    </div>
+    <div class="live-tag" id="liveTag"><span class="dot"></span><span id="liveTagText">connecting…</span></div>
+
+    <div class="overlay" id="overlay">
+      <div class="modal">
+        <h2>WHAT IS THIS?</h2>
+        <p>
+          This is <b>ONE CURSOR</b>. Everyone on this page sees the
+          <b>same</b> cursor. Nobody controls it alone — every player drags
+          toward where they want it to go, all the pulls are added together, and
+          the cursor moves where the <b>net force</b> points.
+        </p>
+        <p>
+          The thin lines are other people pulling right now. The background
+          color shows the crowd's current direction — vivid when everyone
+          agrees, grey when it's a deadlock.
+        </p>
+        <div class="legend">
+          <span><i style="background: var(--red)"></i>pulling left</span>
+          <span><i style="background: var(--blue)"></i>pulling right</span>
+          <span><i style="background: var(--green)"></i>pulling up</span>
+          <span><i style="background: var(--violet)"></i>pulling down</span>
+        </div>
+        <button id="overlayClose">Got it — let me pull</button>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
+    <script>
+      (function () {
+        "use strict";
+
+        /* =========================================================
+   CONFIG
+========================================================= */
+        const BG_MS = 250; // background/HUD refresh
+        const HOLD_MS = 2000; // must match api/_lib.js HOLD_MS
+        const HOLD_RADIUS_NORM = 0.05; // must match api/_lib.js HOLD_RADIUS
+        const PULL_POST_MS = 90; // throttle for posting drag vector to the server
+        const SMOOTH = 0.18; // per-frame smoothing toward the latest authoritative cursor
+
+        const COLORS = {
+          left: { r: 255, g: 77, b: 46 },
+          right: { r: 59, g: 130, b: 246 },
+          up: { r: 45, g: 212, b: 160 },
+          down: { r: 168, g: 85, b: 247 },
+        };
+        const INK = { r: 14, g: 14, b: 18 };
+
+        const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+        const lerp = (a, b, t) => a + (b - a) * t;
+        const TAU = Math.PI * 2;
+
+        /* =========================================================
+   IDENTITY
+========================================================= */
+        const playerId =
+          sessionStorage.getItem("ocPlayerId") ||
+          (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+        sessionStorage.setItem("ocPlayerId", playerId);
+
+        /* =========================================================
+   SHARED STATE — the authoritative copy lives server-side (Vercel
+   function + Redis). Every value below is either a direct mirror of
+   the last broadcast we received, or purely local render/input state.
+========================================================= */
+        let serverCursor = { x: 0.5, y: 0.5 }; // normalized [0,1], authoritative
+        let targetBtnNorm = { x: 0.5, y: 0.3 };
+        let holdStartServer = null; // server epoch ms, or null
+        let onlineCount = 0;
+        let pulls = {}; // playerId -> {dx, dy}, other players' current drags
+
+        function toPx(n) {
+          return { x: n.x * W, y: n.y * H };
+        }
+
+        /* =========================================================
+   STATE
+========================================================= */
+        const field = document.getElementById("field");
+        const canvas = document.getElementById("stage");
+        const ctx = canvas.getContext("2d");
+        const targetBtn = document.getElementById("targetBtn");
+        const pullCountEl = document.getElementById("pullCount");
+        const taskCountEl = document.getElementById("taskCount");
+        const taskNumEl = document.getElementById("taskNum");
+        const toastEl = document.getElementById("toast");
+        const hintEl = document.getElementById("hint");
+        const liveTagEl = document.getElementById("liveTag");
+        const liveTagTextEl = document.getElementById("liveTagText");
+
+        let W = innerWidth,
+          H = innerHeight,
+          DPR = Math.min(devicePixelRatio || 1, 2);
+        const cursor = { x: W / 2, y: H / 2 }; // smoothed render position (px)
+        const drag = { active: false, px: 0, py: 0, dx: 0, dy: 0, len: 0 };
+        const trail = [];
+        let confetti = [];
+
+        function resize() {
+          W = innerWidth;
+          H = innerHeight;
+          DPR = Math.min(devicePixelRatio || 1, 2);
+          canvas.width = W * DPR;
+          canvas.height = H * DPR;
+          canvas.style.width = W + "px";
+          canvas.style.height = H + "px";
+          ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+          placeTarget();
+        }
+        addEventListener("resize", resize);
+        resize();
+
+        function placeTarget() {
+          const p = toPx(targetBtnNorm);
+          targetBtn.style.left = p.x + "px";
+          targetBtn.style.top = p.y + "px";
+        }
+        placeTarget();
+
+        function setLive(on, text) {
+          liveTagEl.classList.toggle("on", !!on);
+          liveTagTextEl.textContent = text;
+        }
+
+        function updateHud() {
+          pullCountEl.textContent = onlineCount.toLocaleString();
+        }
+
+        /* =========================================================
+   INPUT — grab and drag anywhere
+========================================================= */
+        field.addEventListener("pointerdown", (e) => {
+          drag.active = true;
+          field.classList.add("grabbing");
+          field.setPointerCapture(e.pointerId);
+          drag.px = e.clientX;
+          drag.py = e.clientY;
+          updateDrag();
+          hintEl.classList.add("gone");
+        });
+        field.addEventListener("pointermove", (e) => {
+          if (!drag.active) return;
+          drag.px = e.clientX;
+          drag.py = e.clientY;
+          updateDrag();
+        });
+        function endDrag() {
+          if (drag.active) postRelease();
+          drag.active = false;
+          drag.len = 0;
+          field.classList.remove("grabbing");
+        }
+        field.addEventListener("pointerup", endDrag);
+        field.addEventListener("pointercancel", endDrag);
+        addEventListener("blur", endDrag);
+
+        function updateDrag() {
+          drag.dx = drag.px - cursor.x;
+          drag.dy = drag.py - cursor.y;
+          drag.len = Math.hypot(drag.dx, drag.dy);
+        }
+
+        /* =========================================================
+   NETWORK — talk to /api/*, which owns the real game state
+========================================================= */
+        let lastPullPost = 0;
+        function maybePostPull(now) {
+          if (!drag.active || drag.len <= 4) return;
+          if (now - lastPullPost < PULL_POST_MS) return;
+          lastPullPost = now;
+          fetch("/api/pull", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ playerId, dx: drag.dx, dy: drag.dy }),
+          }).catch(() => {});
+        }
+        function postRelease() {
+          fetch("/api/release", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ playerId }),
+          }).catch(() => {});
+        }
+
+        function applyServerState(s) {
+          serverCursor = s.cursor;
+          targetBtnNorm = s.targetBtn;
+          placeTarget();
+          pulls = s.pulls || {};
+          holdStartServer = s.holdStart;
+          taskNumEl.textContent = s.taskNum;
+          taskCountEl.textContent = s.tasksDone;
+          if (s.justCompletedAt) {
+            showToast(`HUMANITY DID IT 🎉 — completed by ${onlineCount} players`);
+            fireConfetti(toPx(s.justCompletedAt));
+          }
+        }
+
+        let pusherClient = null;
+        function initRealtime() {
+          fetch("/api/config")
+            .then((r) => r.json())
+            .then((cfg) => {
+              if (!cfg.key) {
+                setLive(false, "server not configured");
+                return;
+              }
+              pusherClient = new Pusher(cfg.key, {
+                cluster: cfg.cluster,
+                authEndpoint: "/api/pusher-auth",
+                auth: { params: { playerId } },
+              });
+              pusherClient.connection.bind("connecting", () =>
+                setLive(false, "connecting…"),
+              );
+              pusherClient.connection.bind("unavailable", () =>
+                setLive(false, "reconnecting…"),
+              );
+              pusherClient.connection.bind("failed", () =>
+                setLive(false, "offline"),
+              );
+              const channel = pusherClient.subscribe("presence-one-cursor");
+              channel.bind("pusher:subscription_succeeded", (members) => {
+                onlineCount = members.count;
+                updateHud();
+                setLive(true, "live");
+              });
+              channel.bind("pusher:member_added", () => {
+                onlineCount++;
+                updateHud();
+              });
+              channel.bind("pusher:member_removed", () => {
+                onlineCount = Math.max(0, onlineCount - 1);
+                updateHud();
+              });
+              channel.bind("state-update", applyServerState);
+            })
+            .catch(() => setLive(false, "offline"));
+        }
+        initRealtime();
+        fetch("/api/state")
+          .then((r) => r.json())
+          .then(applyServerState)
+          .catch(() => {});
+
+        /* =========================================================
+   TICKS — background mood only; game state comes from the server
+========================================================= */
+        function axisSums() {
+          let L = 0,
+            R = 0,
+            U = 0,
+            D = 0,
+            total = 0;
+          for (const id in pulls) {
+            if (id === playerId) continue; // local drag added below for instant feedback
+            const p = pulls[id];
+            const len = Math.hypot(p.dx, p.dy) || 1;
+            const cx = p.dx / len,
+              cy = p.dy / len;
+            if (cx < 0) L -= cx;
+            else R += cx;
+            if (cy < 0) U -= cy;
+            else D += cy;
+            total++;
+          }
+          if (drag.active && drag.len > 4) {
+            const cx = drag.dx / drag.len,
+              cy = drag.dy / drag.len;
+            if (cx < 0) L -= cx;
+            else R += cx;
+            if (cy < 0) U -= cy;
+            else D += cy;
+            total++;
+          }
+          return { L, R, U, D, total: total || 1 };
+        }
+
+        function tickBackground() {
+          const s = axisSums();
+          const shares = {
+            left: s.L / s.total,
+            right: s.R / s.total,
+            up: s.U / s.total,
+            down: s.D / s.total,
+          };
+          let mix = { r: 0, g: 0, b: 0 };
+          for (const k in shares) {
+            mix.r += COLORS[k].r * shares[k];
+            mix.g += COLORS[k].g * shares[k];
+            mix.b += COLORS[k].b * shares[k];
+          }
+          const dom = clamp(
+            (Math.max(shares.left, shares.right, shares.up, shares.down) -
+              0.25) /
+              0.75,
+            0,
+            1,
+          );
+          const t = 0.1 + dom * 0.55; // keep it dark enough for the white cursor to pop
+          document.body.style.backgroundColor = `rgb(${lerp(INK.r, mix.r, t) | 0},${lerp(INK.g, mix.g, t) | 0},${lerp(INK.b, mix.b, t) | 0})`;
+        }
+        setInterval(tickBackground, BG_MS);
+        tickBackground();
+
+        /* =========================================================
+   RENDER LOOP
+========================================================= */
+        let lastTrailT = 0;
+
+        function frame(now) {
+          // smooth render cursor toward the latest authoritative position
+          const targetPx = toPx(serverCursor);
+          cursor.x = lerp(cursor.x, targetPx.x, SMOOTH);
+          cursor.y = lerp(cursor.y, targetPx.y, SMOOTH);
+          if (drag.active) updateDrag();
+          maybePostPull(now);
+
+          // trail sampling
+          if (now - lastTrailT > 80) {
+            lastTrailT = now;
+            trail.unshift({ x: cursor.x, y: cursor.y });
+            if (trail.length > 12) trail.length = 12;
+          }
+
+          ctx.clearRect(0, 0, W, H);
+          drawTrail();
+          drawCrowdPulls();
+          drawPlayerPull();
+          drawHoldRing();
+          drawCursor(now);
+          drawConfetti();
+
+          requestAnimationFrame(frame);
+        }
+
+        function dirColor(cx, cy) {
+          // color a pull line by its dominant axis
+          if (Math.abs(cx) > Math.abs(cy))
+            return cx < 0 ? COLORS.left : COLORS.right;
+          return cy < 0 ? COLORS.up : COLORS.down;
+        }
+
+        function drawCrowdPulls() {
+          ctx.lineWidth = 1.4;
+          ctx.lineCap = "round";
+          for (const id in pulls) {
+            if (id === playerId) continue; // drawn separately in gold below
+            const p = pulls[id];
+            const len = Math.hypot(p.dx, p.dy) || 1;
+            const cx = p.dx / len,
+              cy = p.dy / len;
+            const c = dirColor(cx, cy);
+            ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},0.30)`;
+            ctx.beginPath();
+            ctx.moveTo(cursor.x + cx * 16, cursor.y + cy * 16);
+            ctx.lineTo(cursor.x + cx * 46, cursor.y + cy * 46);
+            ctx.stroke();
+          }
+        }
+
+        function drawPlayerPull() {
+          if (!drag.active || drag.len < 6) return;
+          const ux = drag.dx / drag.len,
+            uy = drag.dy / drag.len;
+          const sx = cursor.x + ux * 18,
+            sy = cursor.y + uy * 18;
+
+          ctx.strokeStyle = "rgba(255,213,74,0.95)";
+          ctx.lineWidth = 2.6;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(drag.px, drag.py);
+          ctx.stroke();
+
+          // arrowhead at your pointer
+          const a = Math.atan2(uy, ux);
+          ctx.fillStyle = "rgba(255,213,74,0.95)";
+          ctx.beginPath();
+          ctx.moveTo(drag.px, drag.py);
+          ctx.lineTo(
+            drag.px - Math.cos(a - 0.42) * 11,
+            drag.py - Math.sin(a - 0.42) * 11,
+          );
+          ctx.lineTo(
+            drag.px - Math.cos(a + 0.42) * 11,
+            drag.py - Math.sin(a + 0.42) * 11,
+          );
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.strokeStyle = "rgba(255,213,74,0.5)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(drag.px, drag.py, 15, 0, TAU);
+          ctx.stroke();
+        }
+
+        function drawTrail() {
+          for (let i = trail.length - 1; i >= 1; i--) {
+            const p = trail[i];
+            const t = 1 - i / trail.length;
+            ctx.fillStyle = `rgba(255,255,255,${t * 0.18})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 6 * t + 1.5, 0, TAU);
+            ctx.fill();
+          }
+        }
+
+        function drawCursor(now) {
+          const breath = 1 + Math.sin(now / 700) * 0.07;
+          const g = ctx.createRadialGradient(
+            cursor.x,
+            cursor.y,
+            0,
+            cursor.x,
+            cursor.y,
+            42 * breath,
+          );
+          g.addColorStop(0, "rgba(255,255,255,0.55)");
+          g.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(cursor.x, cursor.y, 42 * breath, 0, TAU);
+          ctx.fill();
+
+          const core = ctx.createRadialGradient(
+            cursor.x - 4,
+            cursor.y - 5,
+            2,
+            cursor.x,
+            cursor.y,
+            14,
+          );
+          core.addColorStop(0, "#ffffff");
+          core.addColorStop(1, "#b9bdd6");
+          ctx.fillStyle = core;
+          ctx.beginPath();
+          ctx.arc(cursor.x, cursor.y, 13, 0, TAU);
+          ctx.fill();
+        }
+
+        function drawHoldRing() {
+          const btnPx = toPx(targetBtnNorm);
+          const dist = Math.hypot(cursor.x - btnPx.x, cursor.y - btnPx.y);
+          const holdRadiusPx = HOLD_RADIUS_NORM * Math.min(W, H);
+          if (holdStartServer) {
+            const p = clamp((Date.now() - holdStartServer) / HOLD_MS, 0, 1);
+            ctx.strokeStyle = "rgba(255,213,74,0.95)";
+            ctx.lineWidth = 5;
+            ctx.lineCap = "round";
+            ctx.beginPath();
+            ctx.arc(btnPx.x, btnPx.y, 58, -Math.PI / 2, -Math.PI / 2 + p * TAU);
+            ctx.stroke();
+          } else if (dist < holdRadiusPx * 2.4) {
+            ctx.strokeStyle = "rgba(255,255,255,0.14)";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(btnPx.x, btnPx.y, 58, 0, TAU);
+            ctx.stroke();
+          }
+        }
+
+        /* =========================================================
+   TASK COMPLETE — the server decides when a task is done and tells
+   everyone via state-update's justCompletedAt (see applyServerState).
+========================================================= */
+        function showToast(t) {
+          toastEl.textContent = t;
+          toastEl.classList.add("show");
+          clearTimeout(showToast._t);
+          showToast._t = setTimeout(
+            () => toastEl.classList.remove("show"),
+            2600,
+          );
+        }
+
+        function fireConfetti(originPx) {
+          const cs = [
+            "#ff4d2e",
+            "#3b82f6",
+            "#2dd4a0",
+            "#a855f7",
+            "#ffd54a",
+            "#ffffff",
+          ];
+          for (let i = 0; i < 130; i++) {
+            confetti.push({
+              x: originPx.x + (Math.random() - 0.5) * 80,
+              y: originPx.y + (Math.random() - 0.5) * 40,
+              vx: (Math.random() - 0.5) * 9,
+              vy: -Math.random() * 9 - 3,
+              s: 3.5 + Math.random() * 4.5,
+              c: cs[(Math.random() * cs.length) | 0],
+              rot: Math.random() * TAU,
+              vr: (Math.random() - 0.5) * 0.3,
+              life: 0,
+              max: 80 + Math.random() * 40,
+            });
+          }
+        }
+        function drawConfetti() {
+          for (let i = confetti.length - 1; i >= 0; i--) {
+            const p = confetti[i];
+            p.vy += 0.24;
+            p.x += p.vx;
+            p.y += p.vy;
+            p.rot += p.vr;
+            p.life++;
+            if (p.life >= p.max || p.y > H + 40) {
+              confetti.splice(i, 1);
+              continue;
+            }
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rot);
+            ctx.globalAlpha = clamp(1 - p.life / p.max, 0, 1);
+            ctx.fillStyle = p.c;
+            ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.6);
+            ctx.restore();
+          }
+          ctx.globalAlpha = 1;
+        }
+
+        /* =========================================================
+   INFO — modal + tooltips
+========================================================= */
+        const overlay = document.getElementById("overlay");
+        document
+          .getElementById("mainInfoBtn")
+          .addEventListener("click", () => overlay.classList.add("show"));
+        document
+          .getElementById("overlayClose")
+          .addEventListener("click", () => overlay.classList.remove("show"));
+        overlay.addEventListener("click", (e) => {
+          if (e.target === overlay) overlay.classList.remove("show");
+        });
+        addEventListener("keydown", (e) => {
+          if (e.key === "Escape") overlay.classList.remove("show");
+        });
+
+        (function () {
+          const btn = document.getElementById("taskInfoBtn");
+          const tip = document.createElement("div");
+          tip.className = "tooltip";
+          tip.textContent =
+            "Drag the shared cursor onto the button and hold it there for 2 seconds. Trolls will pull the other way — that's part of the game.";
+          btn.parentElement.appendChild(tip);
+          let on = false;
+          const show = () => {
+            tip.classList.add("show");
+            on = true;
+          };
+          const hide = () => {
+            tip.classList.remove("show");
+            on = false;
+          };
+          btn.addEventListener("mouseenter", show);
+          btn.addEventListener("mouseleave", hide);
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            on ? hide() : show();
+          });
+          document.addEventListener("click", () => {
+            if (on) hide();
+          });
+        })();
+
+        requestAnimationFrame(frame);
+      })();
+    </script>
+  </body>
+</html>

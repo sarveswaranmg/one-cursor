@@ -20,6 +20,11 @@ const STATE_KEY = "one-cursor:state";
 const HOLD_MS = 2000;
 const HOLD_RADIUS = 0.05; // normalized [0,1] space
 const SPEED = 0.16; // normalized units/sec at full consensus
+// Pull vectors arrive in the same normalized [0,1] space the cursor lives in
+// (the client divides its pixel drag by viewport width/height before posting),
+// so a diagonal drag stays diagonal instead of being skewed by aspect ratio.
+const DEAD_ZONE = 0.02; // shorter than this is a twitch, not a vote
+const FULL_PULL = 0.1; // at/above this a drag counts as a whole vote
 const PULL_TTL_MS = 900; // a pull vector not refreshed within this long is dropped
 const BROADCAST_MIN_GAP_MS = 110; // caps fan-out rate regardless of player count
 const BOUND_MIN = 0.03;
@@ -130,6 +135,8 @@ module.exports = {
   HOLD_MS,
   HOLD_RADIUS,
   SPEED,
+  DEAD_ZONE,
+  FULL_PULL,
   PULL_TTL_MS,
   BROADCAST_MIN_GAP_MS,
   BOUND_MIN,

@@ -4,6 +4,8 @@ const {
   HOLD_MS,
   HOLD_RADIUS,
   SPEED,
+  DEAD_ZONE,
+  FULL_PULL,
   PULL_TTL_MS,
   BROADCAST_MIN_GAP_MS,
   BOUND_MIN,
@@ -50,9 +52,13 @@ module.exports = async function handler(req, res) {
   for (const id in state.pulls) {
     const p = state.pulls[id];
     const len = Math.hypot(p.dx, p.dy);
-    if (len < 4) continue; // dead zone, matches the client's own threshold
-    fx += p.dx / len;
-    fy += p.dy / len;
+    if (len < DEAD_ZONE) continue;
+    // Everyone still gets one vote regardless of how far they drag, but the
+    // vote fades in over the dead zone so a cursor that has nearly caught up
+    // to a pointer settles instead of jittering across it every frame.
+    const w = clamp((len - DEAD_ZONE) / (FULL_PULL - DEAD_ZONE), 0, 1);
+    fx += (p.dx / len) * w;
+    fy += (p.dy / len) * w;
     n++;
   }
   if (n > 0) {

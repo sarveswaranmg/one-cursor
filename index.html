@@ -99,6 +99,70 @@
         color: var(--gold);
         font-weight: 700;
       }
+      .mood-line {
+        font-size: 10.5px;
+        letter-spacing: 0.1em;
+        color: var(--dim);
+        opacity: 0.75;
+      }
+
+      /* ---------- proximity taunt ---------- */
+      .proximity-tag {
+        position: fixed;
+        transform: translate(-50%, -50%);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: var(--gold);
+        z-index: 6;
+        pointer-events: none;
+        white-space: nowrap;
+        opacity: 0;
+        transition:
+          opacity 0.25s ease,
+          transform 0.25s ease;
+      }
+      .proximity-tag.show {
+        opacity: 0.85;
+      }
+
+      /* Live commentary that rides along with your own drag. */
+      .coach-tag {
+        position: fixed;
+        transform: translate(-50%, -50%) scale(0.9);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        padding: 5px 10px;
+        border-radius: 999px;
+        border: 1px solid currentColor;
+        background: rgba(10, 10, 14, 0.72);
+        backdrop-filter: blur(4px);
+        color: var(--gold);
+        z-index: 7;
+        pointer-events: none;
+        white-space: nowrap;
+        opacity: 0;
+        transition:
+          opacity 0.18s ease,
+          transform 0.18s ease;
+      }
+      .coach-tag.show {
+        opacity: 0.95;
+        transform: translate(-50%, -50%) scale(1);
+      }
+      .coach-tag.mock {
+        color: #ff6b52;
+      }
+      .coach-tag.hype {
+        color: var(--green);
+      }
+      @media (max-width: 640px) {
+        .coach-tag {
+          font-size: 10px;
+        }
+      }
 
       .info-btn {
         pointer-events: auto;
@@ -406,7 +470,8 @@
           <b id="taskCount">0</b> tasks done
         </div>
         <div class="task-line" style="position: relative">
-          TASK #<b id="taskNum">1</b>&nbsp;— drag the cursor onto the target, no cap
+          TASK #<b id="taskNum">1</b>&nbsp;—
+          <span id="taskLine">drag the cursor onto the target, no cap</span>
           <button
             class="info-btn small"
             id="taskInfoBtn"
@@ -415,6 +480,7 @@
             i
           </button>
         </div>
+        <div class="mood-line" id="moodLine">CONSENSUS: LOADING…</div>
       </div>
       <div style="position: relative; pointer-events: auto">
         <button
@@ -426,6 +492,9 @@
         </button>
       </div>
     </div>
+
+    <div class="proximity-tag" id="proximityTag"></div>
+    <div class="coach-tag" id="coachTag"></div>
 
     <div class="hint" id="hint">
       drag anywhere, no cap — you're in a tug-of-war with total strangers rn
@@ -473,6 +542,8 @@
         const HOLD_RADIUS_NORM = 0.05; // must match api/_lib.js HOLD_RADIUS
         const PULL_POST_MS = 90; // throttle for posting drag vector to the server
         const SMOOTH = 0.18; // per-frame smoothing toward the latest authoritative cursor
+        const DEAD_ZONE_NORM = 0.02; // must match api/_lib.js DEAD_ZONE
+        const FULL_PULL_NORM = 0.1; // must match api/_lib.js FULL_PULL
 
         const COLORS = {
           left: { r: 255, g: 77, b: 46 },
@@ -498,6 +569,146 @@
           "ZERO NOTES, COOKED IT",
           "DELULU BECAME TRUE-LU",
         ];
+
+        // Rotates every new task — purely a flavor instruction, doesn't need
+        // to match across players.
+        const TASK_LINES = [
+          "drag the cursor onto the target, no cap",
+          "get it there before the trolls ruin everything",
+          "steer this thing like your GPA depends on it",
+          "drag it home, chief",
+          "make the crowd proud (lol good luck)",
+          "the target isn't going to click itself",
+          "channel your inner sigma and drag",
+          "this one's mid difficulty, let's go",
+          "manifest the click into existence",
+          "it's giving \"we can do this\"",
+        ];
+
+        // Proximity taunts, banded by distance to target. A new phrase is
+        // only rolled when the band itself changes, so it doesn't flicker.
+        const PROX_HOT = ["SO CLOSE", "RIGHT THERE", "DON'T FUMBLE THIS"];
+        const PROX_WARM = ["GETTING WARM", "ALMOST... KEEP GOING", "WARMER"];
+
+        // Shown in the tab-away-idle roast slot after the intro hint has
+        // already been dismissed once.
+        const IDLE_LINES = [
+          "bro really just left the cursor there 💀",
+          "the trolls are winning by default rn",
+          "someone, anyone — it's cold in here",
+          "the cursor is just vibing, unbothered",
+          "everyone left. couldn't be you.",
+        ];
+
+        // Live commentary while YOU are dragging. Each key is a situation the
+        // coach engine can detect from the drag vector vs. the crowd's net
+        // force vs. the target; `tone` only drives the tag's color.
+        const COACH = {
+          nudge: {
+            tone: "mock",
+            lines: [
+              "THAT'S A NUDGE, NOT A PULL",
+              "PUT SOME RESPECT ON IT",
+              "DRAG FURTHER, COWARD",
+              "MY GRANDMA PULLS HARDER",
+            ],
+          },
+          solo: {
+            tone: "hype",
+            lines: [
+              "NOBODY ELSE IS HERE. GO OFF",
+              "FULL CONTROL. NO EXCUSES",
+              "SOLO RUN — DON'T FUMBLE",
+              "THE CURSOR OBEYS ONLY YOU",
+            ],
+          },
+          hold: {
+            tone: "hype",
+            lines: [
+              "HOLD IT... HOLD IT...",
+              "DON'T BREATHE",
+              "STAY. STAY. STAY.",
+              "ALMOST COOKED IT",
+            ],
+          },
+          traitor: {
+            tone: "mock",
+            lines: [
+              "EVERYONE'S HELPING. YOU'RE NOT",
+              "CERTIFIED HATER BEHAVIOR",
+              "L + YOU'RE THE PROBLEM",
+              "THE VILLAIN ORIGIN STORY",
+              "RATIOED BY YOUR OWN TEAM",
+            ],
+          },
+          hero: {
+            tone: "hype",
+            lines: [
+              "YOU'RE THE ONLY ONE RIGHT",
+              "CARRYING THIS ENTIRE LOBBY",
+              "1 VS EVERYBODY. RESPECT",
+              "MAIN CHARACTER CONFIRMED",
+            ],
+          },
+          against: {
+            tone: "mock",
+            lines: [
+              "FIGHTING THE CROWD, BOLD",
+              "YOU VS THEM. THEY'RE WINNING",
+              "THIS IS SO DELULU",
+              "GOOD LUCK WITH THAT ONE",
+            ],
+          },
+          deadlock: {
+            tone: "mock",
+            lines: [
+              "NOBODY IS MOVING. BEAUTIFUL",
+              "PURE STALEMATE ENERGY",
+              "WE INVENTED STANDING STILL",
+              "THIS IS DEMOCRACY, APPARENTLY",
+            ],
+          },
+          wrongway: {
+            tone: "mock",
+            lines: [
+              "WRONG WAY, CHIEF",
+              "TARGET'S BEHIND YOU 💀",
+              "CONFIDENTLY INCORRECT",
+              "NOT EVEN CLOSE, BE FR",
+            ],
+          },
+          aligned: {
+            tone: "hype",
+            lines: [
+              "LOCKED IN WITH THE SQUAD",
+              "PEAK TEAMWORK, NO NOTES",
+              "THE CROWD AGREES. RARE",
+              "WE MOVE AS ONE 🤝",
+            ],
+          },
+          closing: {
+            tone: "hype",
+            lines: [
+              "KEEP GOING, IT'S WORKING",
+              "YOU'RE COOKING",
+              "CLOSING THE GAP",
+              "DON'T STOP NOW",
+            ],
+          },
+          stuck: {
+            tone: "mock",
+            lines: [
+              "PULLING HARD, GOING NOWHERE",
+              "ALL EFFORT, ZERO PROGRESS",
+              "THIS IS YOUR VILLAIN ARC",
+              "THE CURSOR SAID NO",
+            ],
+          },
+        };
+
+        function pick(arr) {
+          return arr[(Math.random() * arr.length) | 0];
+        }
 
         const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
         const lerp = (a, b, t) => a + (b - a) * t;
@@ -540,14 +751,32 @@
         const hintEl = document.getElementById("hint");
         const liveTagEl = document.getElementById("liveTag");
         const liveTagTextEl = document.getElementById("liveTagText");
+        const taskLineEl = document.getElementById("taskLine");
+        const moodLineEl = document.getElementById("moodLine");
+        const proximityTagEl = document.getElementById("proximityTag");
+        const coachTagEl = document.getElementById("coachTag");
 
         let W = innerWidth,
           H = innerHeight,
           DPR = Math.min(devicePixelRatio || 1, 2);
         const cursor = { x: W / 2, y: H / 2 }; // smoothed render position (px)
-        const drag = { active: false, px: 0, py: 0, dx: 0, dy: 0, len: 0 };
+        const drag = {
+          active: false,
+          px: 0,
+          py: 0,
+          dx: 0,
+          dy: 0,
+          len: 0,
+          nx: 0,
+          ny: 0,
+          nlen: 0,
+        };
         const trail = [];
         let confetti = [];
+        let lastTaskNum = null;
+        let lastActivityTs = Date.now();
+        let idleShowing = false;
+        let hintDismissed = false;
 
         function resize() {
           W = innerWidth;
@@ -577,6 +806,18 @@
 
         function updateHud() {
           pullCountEl.textContent = onlineCount.toLocaleString();
+          document.title =
+            onlineCount > 1
+              ? `🎯 ${onlineCount} unhinged people fighting one cursor`
+              : "ONE CURSOR — the whole internet fighting over 1 cursor";
+        }
+
+        function noteActivity() {
+          lastActivityTs = Date.now();
+          if (idleShowing) {
+            hintEl.classList.add("gone");
+            idleShowing = false;
+          }
         }
 
         /* =========================================================
@@ -590,6 +831,8 @@
           drag.py = e.clientY;
           updateDrag();
           hintEl.classList.add("gone");
+          hintDismissed = true;
+          noteActivity();
         });
         field.addEventListener("pointermove", (e) => {
           if (!drag.active) return;
@@ -601,16 +844,26 @@
           if (drag.active) postRelease();
           drag.active = false;
           drag.len = 0;
+          drag.nlen = 0;
           field.classList.remove("grabbing");
+          hideCoach();
         }
         field.addEventListener("pointerup", endDrag);
         field.addEventListener("pointercancel", endDrag);
         addEventListener("blur", endDrag);
 
+        // Pixel components drive the on-screen arrow; the normalized pair is
+        // what actually goes to the server, because the cursor it moves lives
+        // in [0,1] space. Sending raw pixels made a 45° drag come out shallow
+        // on any non-square viewport — the cursor drifted sideways of where
+        // you were actually pointing.
         function updateDrag() {
           drag.dx = drag.px - cursor.x;
           drag.dy = drag.py - cursor.y;
           drag.len = Math.hypot(drag.dx, drag.dy);
+          drag.nx = drag.dx / W;
+          drag.ny = drag.dy / H;
+          drag.nlen = Math.hypot(drag.nx, drag.ny);
         }
 
         /* =========================================================
@@ -618,13 +871,14 @@
 ========================================================= */
         let lastPullPost = 0;
         function maybePostPull(now) {
-          if (!drag.active || drag.len <= 4) return;
+          if (!drag.active || drag.nlen < DEAD_ZONE_NORM) return;
+          noteActivity();
           if (now - lastPullPost < PULL_POST_MS) return;
           lastPullPost = now;
           fetch("/api/pull", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ playerId, dx: drag.dx, dy: drag.dy }),
+            body: JSON.stringify({ playerId, dx: drag.nx, dy: drag.ny }),
           }).catch(() => {});
         }
         function postRelease() {
@@ -641,13 +895,16 @@
           targetBtn.textContent = s.targetBtn.label || "PRESS ME";
           placeTarget();
           pulls = s.pulls || {};
+          if (Object.keys(pulls).length > 0) noteActivity();
           holdStartServer = s.holdStart;
           taskNumEl.textContent = s.taskNum;
           taskCountEl.textContent = s.tasksDone;
+          if (s.taskNum !== lastTaskNum) {
+            lastTaskNum = s.taskNum;
+            taskLineEl.textContent = pick(TASK_LINES);
+          }
           if (s.justCompletedAt) {
-            const line =
-              CELEBRATIONS[(Math.random() * CELEBRATIONS.length) | 0];
-            showToast(`${line} 🎉 — completed by ${onlineCount} players`);
+            showToast(`${pick(CELEBRATIONS)} 🎉 — completed by ${onlineCount} players`);
             fireConfetti(toPx(s.justCompletedAt));
           }
         }
@@ -702,6 +959,36 @@
         /* =========================================================
    TICKS — background mood only; game state comes from the server
 ========================================================= */
+        // Pulls travel in normalized space, so they have to be scaled back by
+        // the viewport before they mean anything on screen — otherwise every
+        // arrow renders flatter than the drag that produced it.
+        function pullUnitPx(p) {
+          const vx = p.dx * W,
+            vy = p.dy * H;
+          const len = Math.hypot(vx, vy) || 1;
+          return { x: vx / len, y: vy / len };
+        }
+
+        // The crowd's average heading, excluding you — the coach compares your
+        // drag against this to work out whether you're helping or trolling.
+        function crowdNet() {
+          let x = 0,
+            y = 0,
+            count = 0;
+          for (const id in pulls) {
+            if (id === playerId) continue;
+            const u = pullUnitPx(pulls[id]);
+            x += u.x;
+            y += u.y;
+            count++;
+          }
+          if (count > 0) {
+            x /= count;
+            y /= count;
+          }
+          return { x, y, count, mag: Math.hypot(x, y) };
+        }
+
         function axisSums() {
           let L = 0,
             R = 0,
@@ -710,10 +997,9 @@
             total = 0;
           for (const id in pulls) {
             if (id === playerId) continue; // local drag added below for instant feedback
-            const p = pulls[id];
-            const len = Math.hypot(p.dx, p.dy) || 1;
-            const cx = p.dx / len,
-              cy = p.dy / len;
+            const u = pullUnitPx(pulls[id]);
+            const cx = u.x,
+              cy = u.y;
             if (cx < 0) L -= cx;
             else R += cx;
             if (cy < 0) U -= cy;
@@ -755,6 +1041,26 @@
           );
           const t = 0.1 + dom * 0.55; // keep it dark enough for the white cursor to pop
           document.body.style.backgroundColor = `rgb(${lerp(INK.r, mix.r, t) | 0},${lerp(INK.g, mix.g, t) | 0},${lerp(INK.b, mix.b, t) | 0})`;
+
+          moodLineEl.textContent =
+            "CONSENSUS: " +
+            (dom < 0.15
+              ? "DEADLOCK 🫠"
+              : dom < 0.4
+                ? "MESSY"
+                : dom < 0.7
+                  ? "VIBING"
+                  : "UNANIMOUS 😤");
+
+          if (
+            hintDismissed &&
+            !idleShowing &&
+            Date.now() - lastActivityTs > 8000
+          ) {
+            hintEl.textContent = pick(IDLE_LINES);
+            hintEl.classList.remove("gone");
+            idleShowing = true;
+          }
         }
         setInterval(tickBackground, BG_MS);
         tickBackground();
@@ -771,6 +1077,8 @@
           cursor.y = lerp(cursor.y, targetPx.y, SMOOTH);
           if (drag.active) updateDrag();
           maybePostPull(now);
+          trackStall(now);
+          updateCoach(now);
 
           // trail sampling
           if (now - lastTrailT > 80) {
@@ -802,10 +1110,9 @@
           ctx.lineCap = "round";
           for (const id in pulls) {
             if (id === playerId) continue; // drawn separately in gold below
-            const p = pulls[id];
-            const len = Math.hypot(p.dx, p.dy) || 1;
-            const cx = p.dx / len,
-              cy = p.dy / len;
+            const u = pullUnitPx(pulls[id]);
+            const cx = u.x,
+              cy = u.y;
             const c = dirColor(cx, cy);
             ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},0.30)`;
             ctx.beginPath();
@@ -822,8 +1129,15 @@
           const sx = cursor.x + ux * 18,
             sy = cursor.y + uy * 18;
 
-          ctx.strokeStyle = "rgba(255,213,74,0.95)";
-          ctx.lineWidth = 2.6;
+          // Mirror the server's vote weighting so a weak drag visibly reads as
+          // a weak drag instead of looking identical to a full pull.
+          const w = clamp(
+            (drag.nlen - DEAD_ZONE_NORM) / (FULL_PULL_NORM - DEAD_ZONE_NORM),
+            0,
+            1,
+          );
+          ctx.strokeStyle = `rgba(255,213,74,${0.35 + 0.6 * w})`;
+          ctx.lineWidth = 1.6 + 1.6 * w;
           ctx.lineCap = "round";
           ctx.beginPath();
           ctx.moveTo(sx, sy);
@@ -897,23 +1211,162 @@
           ctx.fill();
         }
 
+        let lastProxBand = "far";
+        function updateProximityTag(btnPx, dist) {
+          const band = holdStartServer
+            ? "hold"
+            : dist < HOLD_RADIUS_NORM * 1.6
+              ? "hot"
+              : dist < HOLD_RADIUS_NORM * 2.4
+                ? "warm"
+                : "far";
+          if (band !== lastProxBand) {
+            lastProxBand = band;
+            if (band === "hot") proximityTagEl.textContent = pick(PROX_HOT);
+            else if (band === "warm")
+              proximityTagEl.textContent = pick(PROX_WARM);
+          }
+          proximityTagEl.classList.toggle(
+            "show",
+            band === "hot" || band === "warm",
+          );
+          proximityTagEl.style.left = btnPx.x + "px";
+          proximityTagEl.style.top = btnPx.y - 46 + "px";
+        }
+
+        /* =========================================================
+   COACH — reads your drag against the crowd and the target, and
+   heckles or hypes you accordingly. Purely local flavor.
+========================================================= */
+        const COACH_MIN_MS = 1400; // floor on how fast the situation may flip
+        const COACH_REFRESH_MS = 5000; // reroll the wording if nothing changes
+
+        // Is the shared cursor actually going anywhere? Sampled off the
+        // authoritative position so it reflects the real tug-of-war, not your
+        // own smoothed render position.
+        let stallRef = { x: 0.5, y: 0.5 },
+          stallT = 0,
+          stalled = false;
+        function trackStall(now) {
+          if (now - stallT < 900) return;
+          stallT = now;
+          stalled =
+            Math.hypot(
+              serverCursor.x - stallRef.x,
+              serverCursor.y - stallRef.y,
+            ) < 0.005;
+          stallRef = { x: serverCursor.x, y: serverCursor.y };
+        }
+
+        function coachSituation() {
+          if (drag.nlen < DEAD_ZONE_NORM) return "nudge";
+          if (holdStartServer) return "hold";
+
+          const mx = drag.dx / drag.len,
+            my = drag.dy / drag.len;
+
+          const btnPx = toPx(targetBtnNorm);
+          const tx = btnPx.x - cursor.x,
+            ty = btnPx.y - cursor.y;
+          const tlen = Math.hypot(tx, ty) || 1;
+          const toTarget = mx * (tx / tlen) + my * (ty / tlen);
+
+          const net = crowdNet();
+          const crowd =
+            net.mag > 0.15 ? { x: net.x / net.mag, y: net.y / net.mag } : null;
+          const withCrowd = crowd ? mx * crowd.x + my * crowd.y : 0;
+          const crowdToTarget = crowd
+            ? crowd.x * (tx / tlen) + crowd.y * (ty / tlen)
+            : 0;
+
+          if (net.count >= 2 && net.mag < 0.25) return "deadlock";
+          if (crowd && crowdToTarget > 0.5 && toTarget < -0.3) return "traitor";
+          if (crowd && crowdToTarget < -0.2 && toTarget > 0.6) return "hero";
+          if (crowd && withCrowd < -0.4) return "against";
+          if (toTarget < -0.25) return "wrongway";
+          if (stalled) return "stuck";
+          if (onlineCount <= 1) return "solo";
+          if (crowd && withCrowd > 0.6) return "aligned";
+          return "closing";
+        }
+
+        let coachKey = null,
+          coachSwitchT = -Infinity,
+          coachLineT = -Infinity;
+
+        function setCoachLine(key, now) {
+          const c = COACH[key];
+          coachTagEl.textContent = pick(c.lines);
+          coachTagEl.classList.remove("mock", "hype");
+          coachTagEl.classList.add(c.tone);
+          coachLineT = now;
+        }
+
+        function updateCoach(now) {
+          if (!drag.active) return hideCoach();
+
+          const key = coachSituation();
+          if (key !== coachKey && now - coachSwitchT >= COACH_MIN_MS) {
+            coachKey = key;
+            coachSwitchT = now;
+            setCoachLine(key, now);
+          } else if (coachKey && now - coachLineT >= COACH_REFRESH_MS) {
+            setCoachLine(coachKey, now);
+          }
+
+          // Ride above the pointer, but flip below it near the top edge so the
+          // tag never gets clipped off-screen.
+          const above = drag.py > 70;
+          coachTagEl.style.left = clamp(drag.px, 90, W - 90) + "px";
+          coachTagEl.style.top = drag.py + (above ? -46 : 46) + "px";
+          coachTagEl.classList.add("show");
+        }
+
+        function hideCoach() {
+          coachTagEl.classList.remove("show");
+          coachKey = null;
+          coachSwitchT = -Infinity;
+        }
+
+        // The server decides "close enough" in normalized space, which is an
+        // ELLIPSE on any non-square screen — so measure in that same space and
+        // draw the real ellipse. The old version measured pixels against
+        // min(W,H) and drew a fixed 58px circle, so the ring you saw was never
+        // the zone you actually had to reach.
+        function holdDistNorm() {
+          return Math.hypot(
+            cursor.x / W - targetBtnNorm.x,
+            cursor.y / H - targetBtnNorm.y,
+          );
+        }
+
         function drawHoldRing() {
           const btnPx = toPx(targetBtnNorm);
-          const dist = Math.hypot(cursor.x - btnPx.x, cursor.y - btnPx.y);
-          const holdRadiusPx = HOLD_RADIUS_NORM * Math.min(W, H);
+          const dist = holdDistNorm();
+          const rx = HOLD_RADIUS_NORM * W,
+            ry = HOLD_RADIUS_NORM * H;
+          updateProximityTag(btnPx, dist);
           if (holdStartServer) {
             const p = clamp((Date.now() - holdStartServer) / HOLD_MS, 0, 1);
             ctx.strokeStyle = "rgba(255,213,74,0.95)";
             ctx.lineWidth = 5;
             ctx.lineCap = "round";
             ctx.beginPath();
-            ctx.arc(btnPx.x, btnPx.y, 58, -Math.PI / 2, -Math.PI / 2 + p * TAU);
+            ctx.ellipse(
+              btnPx.x,
+              btnPx.y,
+              rx,
+              ry,
+              0,
+              -Math.PI / 2,
+              -Math.PI / 2 + p * TAU,
+            );
             ctx.stroke();
-          } else if (dist < holdRadiusPx * 2.4) {
+          } else if (dist < HOLD_RADIUS_NORM * 2.4) {
             ctx.strokeStyle = "rgba(255,255,255,0.14)";
             ctx.lineWidth = 4;
             ctx.beginPath();
-            ctx.arc(btnPx.x, btnPx.y, 58, 0, TAU);
+            ctx.ellipse(btnPx.x, btnPx.y, rx, ry, 0, 0, TAU);
             ctx.stroke();
           }
         }
